@@ -1,5 +1,6 @@
 import pygame as pg
-import sys
+import sys, os
+
 
 pg.init()
 pg.font.init()
@@ -19,7 +20,6 @@ Title_Font = pg.font.SysFont(None, 100)
 
 
 Textures = {}
-
 
 #Functions
 def World_To_Screen(rect, camera_x, camera_y):
@@ -47,6 +47,20 @@ def Toggle_Fullscreen():
         screen = pg.display.set_mode((SCREEN_width, SCREEN_height), pg.FULLSCREEN | pg.SCALED)
     else:
         screen = pg.display.set_mode((SCREEN_width, SCREEN_height), pg.SCALED)
+        
+def Load_Level(path):
+    with open(path, "r") as file:
+        lines = file.readlines()
+    return [line.rstrip("\n") for line in lines]
+
+def Grid_To_Pixels(col, row):
+    return col * Tile_Size, row * Tile_Size
+
+def Resource_Path(relative_path):
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return relative_path
+    
 
 #Classes
 class Platform(pg.sprite.Sprite):
@@ -81,29 +95,75 @@ class Menu_Button(pg.sprite.Sprite):
         self.rect = self.image.get_rect(topleft=(x, y))
 
 #Textures
-Grass_Tex = Load_Texture("Grass", "textures/grass.png")
-Grass_Side_Tex = Load_Texture("Grass Side", "textures/grass_side.png")
-Checkpoint_Tex = Load_Texture("Checkpoint", "textures/checkpoint.png")
+Grass_Tex = Load_Texture("Grass", Resource_Path("textures/grass.png"))
+Grass_Side_Tex = Load_Texture("Grass Side", Resource_Path("textures/grass_side.png"))
+Checkpoint_Tex = Load_Texture("Checkpoint", Resource_Path("textures/checkpoint.png"))
+Dirt_Tex = Load_Texture("Dirt", Resource_Path("textures/dirt.png"))
+Spike_Tex = Load_Texture("Spike", Resource_Path("textures/spike.png"))
+
+Tile_Size = 25
+Level_Layout = Load_Level(Resource_Path("levels/level1.txt"))
+
+Tile_Legend = {
+    "G": "Ground",
+    "P": "Platform",
+    "H": "Hazard",
+    "C": "Checkpoint",
+    
+}
 
 #Sprites
 Player = pg.Rect((100, 450, 25, 50))
-ground = Ground(-1000, 500, Level_Width * 4, Level_Height * 4, Grass_Tex)
-platform1 = Platform(300, 430, 100, 70, Grass_Side_Tex)
-platform2 = Platform(500, 350, 100, 70, Grass_Side_Tex)
-platform3 = Platform(700, 250, 20, 150, Grass_Side_Tex)
-platform4 = Platform(430, 135, 100, 70, Grass_Side_Tex)
-death_plane1 = Hazard(700, 490, 75, 10, Grass_Tex)
-checkpoint1 = Checkpoint(525, 275, 50, 50, Checkpoint_Tex)
-Start_Button = Menu_Button(250, 300, 300, 50)
-Start_Text = Button_Font.render("Start", True, (255, 255, 255))
-Title_Text = Title_Font.render("2d Platformer", True, (255, 255, 255))
+
+Tile_Class = {
+    "G": Ground,
+    "P": Platform,
+    "H": Hazard,
+    "C": Checkpoint,
+    "D": Platform,
+}
+
+Tile_Texture = {
+    "G": Grass_Tex,
+    "P": Grass_Side_Tex,
+    "H": Spike_Tex,
+    "C": Checkpoint_Tex,
+    "D": Dirt_Tex,
+}
 
 #Groups
-All_Platforms = pg.sprite.Group(ground, platform1, platform2, platform3, platform4, death_plane1, checkpoint1) #Every platform the Player collides with
-Solids = pg.sprite.Group(platform1, platform2, platform3, platform4) #Only the platform that act with walls or side collisions
-Hazards = pg.sprite.Group(death_plane1) #Anything that kills the player
-Checkpoints = pg.sprite.Group(checkpoint1) #Checkpoints for the player to spawn after death
-Menu_Buttons = pg.sprite.Group(Start_Button)
+All_Platforms = pg.sprite.Group()
+Solids = pg.sprite.Group()
+Landable = pg.sprite.Group()
+Hazards = pg.sprite.Group()
+Checkpoints = pg.sprite.Group()
+ground = None
+
+for row_index, row in enumerate(Level_Layout):
+    for col_index, symbol in enumerate(row):
+        if symbol == ".":
+            continue
+        obj_class = Tile_Class[symbol]
+        texture = Tile_Texture[symbol]
+        x, y = Grid_To_Pixels(col_index, row_index)
+        obj = obj_class(x, y, Tile_Size, Tile_Size, texture)
+        
+        All_Platforms.add(obj)
+        if symbol == "P":
+            Solids.add(obj)
+            Landable.add(obj)
+        elif symbol == "H":
+            Hazards.add(obj)
+        elif symbol == "C":
+            Checkpoints.add(obj)
+        elif symbol == "G":
+            Solids.add(obj)
+            Landable.add(obj)
+            if ground is None:
+                ground = obj
+        elif symbol == "D":
+            Solids.add(obj)
+        
 
 #Variables
 Player_Speed = 3
@@ -114,13 +174,11 @@ Sprinting = False
 Movement_Direction = Player_Speed
 Gravity_Force = 0.4
 On_Ground = True
-Platforms = [platform1, platform2]
 Player_Bottom = Player.bottom
 Player_Top = Player.top
 Collide_Tolerance = 15
 Coyote_Timer_Max = 10
 Coyote_Timer = 0
-Prev_Rect = Player.copy()
 Camera_X = 0
 Camera_Y = 0
 Deadzone_Height = 80
@@ -138,25 +196,6 @@ Walljump_Decay = 0.85
 Max_Down_Speed = 5
 Max_Up_Speed = 7
 Fullscreen = False
-
-menu = True
-while menu:
-    screen.fill((0, 200, 255))
-    
-    for buttons in Menu_Buttons:
-        screen.blit(buttons.image, World_To_Screen(buttons.rect, Camera_X, Camera_Y))
-    screen.blit(Start_Text, (360,310))
-    screen.blit(Title_Text, (200, 100))
-    for event in pg.event.get():
-        if event.type == pg.MOUSEBUTTONDOWN:
-            if event.button == 1:
-                if Start_Button.rect.collidepoint(event.pos):
-                    menu = False
-        if event.type == pg.QUIT:
-            menu = False
-    pg.display.update()
-    clock.tick(60)
-
 
 run = True
 while run:
@@ -180,14 +219,7 @@ while run:
     
     Player.y += Player_Yvel
     Player.x += Player_Xvel
-    
-    #Ground collision
-    if Player.colliderect(ground):
-        On_Ground = True
-        Player_Speed = 3
-        Player.bottom = ground.rect.top
-        Player_Yvel = 0
-        
+
     #Hazard collision
     for hazards in Hazards:
         if Player.colliderect(hazards):
@@ -199,13 +231,14 @@ while run:
             Set_Checkpoint(checkpoints)
     
     #Vertical collision
-    for objects in Solids:
+    for objects in Landable:
         if Player.colliderect(objects.rect) and Player_Yvel > 0 and Player_Bottom <= objects.rect.top + Collide_Tolerance:
             On_Ground = True
             Player_Speed = 3
             Player.bottom = objects.rect.top
             Player_Yvel = 0
-        if Player.colliderect(objects.rect) and Player_Top > objects.rect.bottom:
+    for objects in Solids:
+        if Player.colliderect(objects.rect) and Player_Yvel < 0 and Player_Top >= objects.rect.bottom:
             Player.top = objects.rect.bottom
             Player_Yvel = 0
     
@@ -272,11 +305,6 @@ while run:
         if On_Ground:
             Player_Speed = 3
             Player_Jump_Height = 8
-            
-    if key[pg.K_LCTRL] == True or key[pg.K_RCTRL] and On_Ground == False:
-        print(On_Ground)
-        Player.x += 2
-        
     
     Screen_Player_X = Player.centerx - Camera_X
     Screen_Player_Y = Player.centery - Camera_Y
@@ -301,7 +329,7 @@ while run:
     pg.draw.rect(screen, (250, 0, 250), World_To_Screen(Player, Camera_X, Camera_Y))
     
     Player.clamp_ip(pg.Rect(0, 0, Level_Width, Level_Height))
-    print(On_Ground)
+    #print(On_Ground)
     for event in pg.event.get():
         if event.type == pg.MOUSEBUTTONDOWN:
             print(event.pos)
