@@ -48,7 +48,7 @@ def Toggle_Fullscreen():
     else:
         screen = pg.display.set_mode((SCREEN_width, SCREEN_height), pg.SCALED)
         
-def Load_Level(path):
+def Set_Level(path):
     with open(path, "r") as file:
         lines = file.readlines()
     return [line.rstrip("\n") for line in lines]
@@ -60,7 +60,35 @@ def Resource_Path(relative_path):
     if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, relative_path)
     return relative_path
-    
+
+def Point_In_Triangle(px, py, triangle):
+    (x1, y1), (x2, y2), (x3, y3) = triangle
+    d1 = (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2)
+    d2 = (px - x3) * (y2 - y3) - (x2 - x3) * (py - y3)
+    d3 = (px - x1) * (y3 - y1) - (x3 - x1) * (py - y1)
+    has_neg = (d1 < 0) or (d2 < 0) or (d3 < 0)
+    has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
+    return not (has_neg and has_pos)
+
+def Rect_Triangle_Collision(rect, triangle):
+    corners = [
+        (rect.left, rect.top),
+        (rect.right, rect.top),
+        (rect.left, rect.bottom),
+        (rect.right, rect.bottom),
+    ]
+    for corner in corners:
+        if Point_In_Triangle(corner[0], corner[1], triangle):
+            return True
+    return False
+
+def Trin_Transparent(surface):
+    rect = surface.get_bounding_rect()
+    return surface.subsurface(rect).copy()
+
+def Load_Level(level):
+    global Level_Layout
+    Level_Layout = Set_Level(Resource_Path(f"levels/{level}.txt"))
 
 #Classes
 class Platform(pg.sprite.Sprite):
@@ -75,16 +103,27 @@ class Ground(pg.sprite.Sprite):
         self.image = pg.transform.scale(texture, (width, height))
         self.rect = self.image.get_rect(topleft=(x, y))
 
-class Hazard(pg.sprite.Sprite):
+class Spike(pg.sprite.Sprite):
     def __init__(self, x, y, width, height, texture):
         super().__init__()
-        self.image = pg.transform.scale(texture, (width, height))
-        self.rect = self.image.get_rect(topleft=(x, y))
+        spike_width = width // 2
+        spike_height = height // 2
+        self.image = pg.transform.scale(texture, (spike_width, spike_height))
+        self.rect = self.image.get_rect(midbottom=(x + width // 2, y + height))
+        self.triangle = [
+            (self.rect.left, self.rect.bottom),
+            (self.rect.right, self.rect.bottom),
+            (self.rect.centerx, self.rect.top),
+        ]
+    def check_collision(self, player_rect):
+        if not player_rect.colliderect(self.rect):
+            return False
+        return Rect_Triangle_Collision(player_rect, self.triangle)
 
 class Checkpoint(pg.sprite.Sprite):
     def __init__(self, x, y, width, height, texture):
         super().__init__()
-        self.image = pg.transform.scale(texture, (width, height))
+        self.image = pg.transform.scale(texture, (width // 2 , height // 2))
         self.rect = self.image.get_rect(topleft=(x, y))
 
 class Menu_Button(pg.sprite.Sprite):
@@ -99,26 +138,25 @@ Grass_Tex = Load_Texture("Grass", Resource_Path("textures/grass.png"))
 Grass_Side_Tex = Load_Texture("Grass Side", Resource_Path("textures/grass_side.png"))
 Checkpoint_Tex = Load_Texture("Checkpoint", Resource_Path("textures/checkpoint.png"))
 Dirt_Tex = Load_Texture("Dirt", Resource_Path("textures/dirt.png"))
-Spike_Tex = Load_Texture("Spike", Resource_Path("textures/spike.png"))
+Spike_Tex = Trin_Transparent(Load_Texture("Spike", Resource_Path("textures/spike.png")))
+Player_Tex = Load_Texture("Player", Resource_Path("textures/player.png"))
 
-Tile_Size = 25
-Level_Layout = Load_Level(Resource_Path("levels/level1.txt"))
+Tile_Size = 50
+Level_Layout = Set_Level(Resource_Path("levels/level1.txt"))
 
 Tile_Legend = {
     "G": "Ground",
     "P": "Platform",
-    "H": "Hazard",
+    "S": "Spike",
     "C": "Checkpoint",
+    "D": "Platform",
     
 }
-
-#Sprites
-Player = pg.Rect((100, 450, 25, 50))
 
 Tile_Class = {
     "G": Ground,
     "P": Platform,
-    "H": Hazard,
+    "S": Spike,
     "C": Checkpoint,
     "D": Platform,
 }
@@ -126,10 +164,18 @@ Tile_Class = {
 Tile_Texture = {
     "G": Grass_Tex,
     "P": Grass_Side_Tex,
-    "H": Spike_Tex,
+    "S": Spike_Tex,
     "C": Checkpoint_Tex,
     "D": Dirt_Tex,
 }
+
+#Sprites
+Player = pg.Rect((100, 450, 25, 50))
+Player_Image = pg.transform.scale(Player_Tex, (Player.width, Player.height))
+#Menu Buttons
+Button1 = Menu_Button(300, 300, 190, 50)
+Start_Text = Button_Font.render("New Game", True, (255, 255, 255))
+Title_Text = Title_Font.render("2d Platformer", True, (255, 255, 255))
 
 #Groups
 All_Platforms = pg.sprite.Group()
@@ -137,6 +183,7 @@ Solids = pg.sprite.Group()
 Landable = pg.sprite.Group()
 Hazards = pg.sprite.Group()
 Checkpoints = pg.sprite.Group()
+Menu_Buttons = pg.sprite.Group(Button1)
 ground = None
 
 for row_index, row in enumerate(Level_Layout):
@@ -152,7 +199,7 @@ for row_index, row in enumerate(Level_Layout):
         if symbol == "P":
             Solids.add(obj)
             Landable.add(obj)
-        elif symbol == "H":
+        elif symbol == "S":
             Hazards.add(obj)
         elif symbol == "C":
             Checkpoints.add(obj)
@@ -187,6 +234,7 @@ Screen_Player_X = Player.centerx - Camera_X
 Screen_Player_Y = Player.centery - Camera_Y
 Checkpoint_X = 100
 Checkpoint_Y = 450
+Checkpoint_Location = (Checkpoint_X, Checkpoint_Y)
 Touching_Wall = False
 Can_Walljump = False
 Touching_Wall_Left = False
@@ -196,15 +244,49 @@ Walljump_Decay = 0.85
 Max_Down_Speed = 5
 Max_Up_Speed = 7
 Fullscreen = False
+run = False
+menu = False
+Dash_Delay = 0
+Dash_Speed = 30
+Can_Dash = True
 
-run = True
+
+menu = True
+Load_Level("level1")
+while menu:
+    screen.fill((0, 200, 255))
+    
+    
+    for buttons in Menu_Buttons:
+        screen.blit(buttons.image, World_To_Screen(buttons.rect, Camera_X, Camera_Y))
+    screen.blit(Start_Text, (310, 310))
+    screen.blit(Title_Text, (200, 100))
+        
+    
+    for event in pg.event.get():
+        if event.type == pg.MOUSEBUTTONDOWN:
+            if Button1.rect.collidepoint(event.pos):
+                menu = False
+                run = True
+        if event.type == pg.QUIT:
+            menu = False
+            run = False
+        if event.type == pg.KEYDOWN:
+            if event.key == pg.K_F11:
+                Toggle_Fullscreen()
+    pg.display.update()
+    clock.tick(60)
+
 while run:
     screen.fill((0, 200, 255))
 
     if Touching_Wall == True:
         Gravity_Force = 0.05
-    else:
+    elif Touching_Wall == False:
         Gravity_Force = 0.4
+    elif Dash_Delay >0:
+        Gravity_Force = 0
+        
     
     Player_Xvel = Movement_Direction + Walljump_Push  
     Walljump_Push *= Walljump_Decay
@@ -222,7 +304,7 @@ while run:
 
     #Hazard collision
     for hazards in Hazards:
-        if Player.colliderect(hazards):
+        if hazards.check_collision(Player):
             Spawn_At_Checkpoint()
             
     #Checkpoint collision
@@ -234,6 +316,7 @@ while run:
     for objects in Landable:
         if Player.colliderect(objects.rect) and Player_Yvel > 0 and Player_Bottom <= objects.rect.top + Collide_Tolerance:
             On_Ground = True
+            Can_Dash = True
             Player_Speed = 3
             Player.bottom = objects.rect.top
             Player_Yvel = 0
@@ -245,9 +328,15 @@ while run:
     Player_Bottom = Player.bottom
     Player_Top = Player.top
     
+    if Dash_Delay > 0:
+        Player_Yvel -= Player_Yvel
+        Player_Speed *= 2
+        
+    
     #Player Movement
     key = pg.key.get_pressed()
     
+    #Horizontal collision
     Touching_Wall = False
     Can_Walljump = False
     for objects in Solids:
@@ -257,6 +346,8 @@ while run:
                 if Player_Xvel < 0:
                     Player.left = objects.rect.right
                     Touching_Wall = True
+                    Can_Dash = True
+                    Dash_Delay = 0
                     Touching_Wall_Right = True
                     Touching_Wall_Left = False
                     if On_Ground == False:
@@ -264,6 +355,8 @@ while run:
                 elif Player_Xvel > 0:
                     Player.right = objects.rect.left
                     Touching_Wall = True
+                    Dash_Delay = 0
+                    Can_Dash = True
                     Touching_Wall_Right = False
                     Touching_Wall_Left = True
                     if On_Ground == False:
@@ -272,7 +365,10 @@ while run:
         Max_Down_Speed = 2
     else:
         Max_Down_Speed = 5
-        
+    
+    if Dash_Delay > 0:
+        Dash_Delay -= 1
+    
     Movement_Direction = 0
     if key[pg.K_a] == True:
         Movement_Direction = -Player_Speed
@@ -298,13 +394,28 @@ while run:
                 Walljump_Push = Player_Speed * 2
         
         
-    if key[pg.K_LSHIFT] == True or key[pg.K_RSHIFT] == True and On_Ground == True:
-        Player_Speed = 5
-        Player_Jump_Height = 8
+    if key[pg.K_LSHIFT] == True or key[pg.K_RSHIFT] == True:
+        if On_Ground == True:
+            Player_Speed = 5
+            Player_Jump_Height = 8
     else:
-        if On_Ground:
+        if On_Ground == False:
             Player_Speed = 3
             Player_Jump_Height = 8
+            
+    if key[pg.K_LCTRL] == True or key[pg.K_RCTRL] == True:
+        if Dash_Delay <= 0:
+            if Can_Dash == True:
+                if On_Ground == False:
+                    Can_Dash = False
+                    Dash_Delay = 20
+                    Gravity_Force = 0
+                    Player_Yvel -= Player_Yvel
+                    Player_Xvel *= 3
+    print(Dash_Delay)
+        
+
+            
     
     Screen_Player_X = Player.centerx - Camera_X
     Screen_Player_Y = Player.centery - Camera_Y
@@ -313,7 +424,7 @@ while run:
     Right_Bound = SCREEN_width // 2 + Deadzone_Width
     Top_Bound = SCREEN_height // 2 - Deadzone_Height
     Bottom_Bound = SCREEN_height // 2 + Deadzone_Height
-    
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
     if Screen_Player_X < Left_Bound:
         Camera_X -= (Left_Bound - Screen_Player_X)
     elif Screen_Player_X > Right_Bound:
@@ -326,15 +437,16 @@ while run:
     
     for objects in All_Platforms:
         screen.blit(objects.image, World_To_Screen(objects.rect, Camera_X, Camera_Y))
-    pg.draw.rect(screen, (250, 0, 250), World_To_Screen(Player, Camera_X, Camera_Y))
+    screen.blit(Player_Image, World_To_Screen(Player, Camera_X, Camera_Y))
     
-    Player.clamp_ip(pg.Rect(0, 0, Level_Width, Level_Height))
-    #print(On_Ground)
+    #Player.clamp_ip(pg.Rect(0, 0, SCREEN_width, SCREEN_height))
+    #print(Current_Checkpoint)
     for event in pg.event.get():
         if event.type == pg.MOUSEBUTTONDOWN:
             print(event.pos)
         if event.type == pg.QUIT:
             run = False
+            menu = False
         if event.type == pg.KEYDOWN:
             if event.key == pg.K_F11:
                 Toggle_Fullscreen()
