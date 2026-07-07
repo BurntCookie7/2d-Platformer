@@ -1,5 +1,5 @@
 import pygame as pg
-import sys, os
+import sys, os, subprocess
 import tkinter as tk
 from tkinter import filedialog
 
@@ -160,6 +160,17 @@ def Zoom_Out():
         Tile_Size -= 10
     Recalculate_Offset()
     Draw_Grid()
+    
+def Quit_To_Game():
+    root.destroy()
+    pg.quit()
+    
+    clean_env = os.environ.copy()
+    clean_env.pop('SDL_WINDOWID', None)
+    clean_env.pop('SDL_VIDEODRIVER', None)
+    
+    game_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "game.py")
+    subprocess.Popen([sys.executable, game_path], env=clean_env)
 
 
 Default_Width = tk.StringVar()
@@ -173,8 +184,10 @@ tk.Button(sidebar, text="Platform (P)", command=lambda: Select_Symbol("P")).pack
 tk.Button(sidebar, text="Spike (S)", command=lambda: Select_Symbol("S")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Checkpoint (C)", command=lambda: Select_Symbol("C")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Dirt (D)", command=lambda: Select_Symbol("D")).pack(fill=tk.X, pady=2)
+tk.Button(sidebar, text="Level End (E)", command=lambda: Select_Symbol("E")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Save", command=lambda: Save_Level_As()).pack(fill=tk.X, pady=10)
 tk.Button(sidebar, text="Load", command=lambda: Load_Level_Editor("levels/level1.txt")).pack(fill=tk.X, pady=2)
+tk.Button(sidebar, text="Quit To Game", command=Quit_To_Game).pack(fill=tk.X, pady=2)
 Width_Entry_Title = tk.Label(Options, text="Grid Width").pack()
 Width_Entry = tk.Entry(Options, textvariable=Default_Width)
 Width_Entry.pack()

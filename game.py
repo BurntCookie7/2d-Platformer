@@ -1,5 +1,5 @@
 import pygame as pg
-import sys, os
+import sys, os, subprocess
 
 
 pg.init()
@@ -18,8 +18,7 @@ clock = pg.time.Clock()
 Button_Font = pg.font.SysFont(None, 48)
 Title_Font = pg.font.SysFont(None, 100)
 
-
-Textures = {}
+from tile_data import Tile_Texture, Player_Tex, Resource_Path
 
 #Functions
 def World_To_Screen(rect, camera_x, camera_y):
@@ -34,11 +33,6 @@ def Spawn_At_Checkpoint():
     global Checkpoint_X, Checkpoint_Y
     Player.x = Checkpoint_X
     Player.y = Checkpoint_Y
-
-def Load_Texture(name, path):
-    if name not in Textures:
-        Textures[name] = pg.image.load(path).convert_alpha()
-    return Textures[name]
 
 def Toggle_Fullscreen():
     global Fullscreen, screen
@@ -55,11 +49,6 @@ def Set_Level(path):
 
 def Grid_To_Pixels(col, row):
     return col * Tile_Size, row * Tile_Size
-
-def Resource_Path(relative_path):
-    if hasattr(sys, "_MEIPASS"):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return relative_path
 
 def Point_In_Triangle(px, py, triangle):
     (x1, y1), (x2, y2), (x3, y3) = triangle
@@ -87,8 +76,58 @@ def Trin_Transparent(surface):
     return surface.subsurface(rect).copy()
 
 def Load_Level(level):
-    global Level_Layout
+    global Level_Layout, ground, Solids, Hazards, Landable, Checkpoints, Current_Map
+    
+    Level_Layout = Set_Level(Resource_Path(f"levels/{Current_Map}.txt"))
+    
+            
+    All_Platforms.empty()
+    Solids.empty()
+    Landable.empty()
+    Hazards.empty()
+    Checkpoints.empty()
+    Level_End_Triggers.empty()
+            
+    
     Level_Layout = Set_Level(Resource_Path(f"levels/{level}.txt"))
+    
+    for row_index, row in enumerate(Level_Layout):
+        for col_index, symbol in enumerate(row):
+            if symbol == ".":
+                continue
+            obj_class = Tile_Class[symbol]
+            texture = Tile_Texture[symbol]
+            x, y = Grid_To_Pixels(col_index, row_index)
+            obj = obj_class(x, y, Tile_Size, Tile_Size, texture)
+            
+            All_Platforms.add(obj)
+            if symbol == "P":
+                Solids.add(obj)
+                Landable.add(obj)
+            elif symbol == "S":
+                Hazards.add(obj)
+            elif symbol == "C":
+                Checkpoints.add(obj)
+            elif symbol == "G":
+                Solids.add(obj)
+                Landable.add(obj)
+                if ground is None:
+                    ground = obj
+            elif symbol == "D":
+                Solids.add(obj)
+            elif symbol == "E":
+                Level_End_Triggers.add(obj)
+                
+    Current_Map = f"{level}"
+                
+    Player.x = 100
+    
+    if ground is not None:
+        Player.bottom = ground.rect.top
+    else:
+        Player.y = 450
+            
+
 
 #Classes
 class Platform(pg.sprite.Sprite):
@@ -132,14 +171,12 @@ class Menu_Button(pg.sprite.Sprite):
         self.image = pg.Surface((width, height))
         self.image.fill((0, 255, 50))
         self.rect = self.image.get_rect(topleft=(x, y))
-
-#Textures
-Grass_Tex = Load_Texture("Grass", Resource_Path("textures/grass.png"))
-Grass_Side_Tex = Load_Texture("Grass Side", Resource_Path("textures/grass_side.png"))
-Checkpoint_Tex = Load_Texture("Checkpoint", Resource_Path("textures/checkpoint.png"))
-Dirt_Tex = Load_Texture("Dirt", Resource_Path("textures/dirt.png"))
-Spike_Tex = Trin_Transparent(Load_Texture("Spike", Resource_Path("textures/spike.png")))
-Player_Tex = Load_Texture("Player", Resource_Path("textures/player.png"))
+        
+class Level_End(pg.sprite.Sprite):
+    def __init__(self, x, y, width, height, texture):
+        super().__init__()
+        self.image = pg.transform.scale(texture, (width, height))
+        self.rect = self.image.get_rect(topleft=(x, y))
 
 Tile_Size = 50
 Level_Layout = Set_Level(Resource_Path("levels/level1.txt"))
@@ -150,6 +187,7 @@ Tile_Legend = {
     "S": "Spike",
     "C": "Checkpoint",
     "D": "Platform",
+    "E": "Level_End",
     
 }
 
@@ -159,22 +197,17 @@ Tile_Class = {
     "S": Spike,
     "C": Checkpoint,
     "D": Platform,
-}
-
-Tile_Texture = {
-    "G": Grass_Tex,
-    "P": Grass_Side_Tex,
-    "S": Spike_Tex,
-    "C": Checkpoint_Tex,
-    "D": Dirt_Tex,
+    "E": Level_End,
 }
 
 #Sprites
 Player = pg.Rect((100, 450, 25, 50))
 Player_Image = pg.transform.scale(Player_Tex, (Player.width, Player.height))
 #Menu Buttons
-Button1 = Menu_Button(300, 300, 190, 50)
-Start_Text = Button_Font.render("New Game", True, (255, 255, 255))
+New_Game = Menu_Button(300, 300, 190, 50)
+Editor = Menu_Button(300, 370, 190, 50)
+New_Game_Text = Button_Font.render("New Game", True, (255, 255, 255))
+Editor_Text = Button_Font.render("Editor", True, (255, 255, 255))
 Title_Text = Title_Font.render("2d Platformer", True, (255, 255, 255))
 
 #Groups
@@ -183,7 +216,9 @@ Solids = pg.sprite.Group()
 Landable = pg.sprite.Group()
 Hazards = pg.sprite.Group()
 Checkpoints = pg.sprite.Group()
-Menu_Buttons = pg.sprite.Group(Button1)
+Menu_Buttons = pg.sprite.Group(New_Game, Editor)
+Level_End_Triggers = pg.sprite.Group()
+
 ground = None
 
 for row_index, row in enumerate(Level_Layout):
@@ -210,6 +245,8 @@ for row_index, row in enumerate(Level_Layout):
                 ground = obj
         elif symbol == "D":
             Solids.add(obj)
+        elif symbol == "E":
+            Level_End_Triggers.add(obj)
         
 
 #Variables
@@ -249,25 +286,31 @@ menu = False
 Dash_Delay = 0
 Dash_Speed = 30
 Can_Dash = True
+Level_Number = 1
+Current_Map = f"level{Level_Number}"
 
 
 menu = True
-Load_Level("level1")
 while menu:
     screen.fill((0, 200, 255))
     
     
     for buttons in Menu_Buttons:
         screen.blit(buttons.image, World_To_Screen(buttons.rect, Camera_X, Camera_Y))
-    screen.blit(Start_Text, (310, 310))
-    screen.blit(Title_Text, (200, 100))
+    screen.blit(New_Game_Text, (310, 310))
+    screen.blit(Title_Text, (185, 100))
+    screen.blit(Editor_Text, (345, 380))
         
     
     for event in pg.event.get():
         if event.type == pg.MOUSEBUTTONDOWN:
-            if Button1.rect.collidepoint(event.pos):
+            if New_Game.rect.collidepoint(event.pos):
                 menu = False
                 run = True
+            elif Editor.rect.collidepoint(event.pos):
+                menu = False
+                run = False
+                subprocess.Popen(["python", "level_editor.py"])
         if event.type == pg.QUIT:
             menu = False
             run = False
@@ -311,6 +354,13 @@ while run:
     for checkpoints in Checkpoints:
         if Player.colliderect(checkpoints):
             Set_Checkpoint(checkpoints)
+    
+    #Level end collision
+    for triggers in Level_End_Triggers:
+        if Player.colliderect(triggers.rect):
+            Level_Number += 1
+            Current_Map = f"level{Level_Number}"
+            Load_Level(f"level{Level_Number}")
     
     #Vertical collision
     for objects in Landable:
@@ -412,9 +462,6 @@ while run:
                     Gravity_Force = 0
                     Player_Yvel -= Player_Yvel
                     Player_Xvel *= 3
-    print(Dash_Delay)
-        
-
             
     
     Screen_Player_X = Player.centerx - Camera_X
@@ -440,7 +487,7 @@ while run:
     screen.blit(Player_Image, World_To_Screen(Player, Camera_X, Camera_Y))
     
     #Player.clamp_ip(pg.Rect(0, 0, SCREEN_width, SCREEN_height))
-    #print(Current_Checkpoint)
+    print(Current_Map)
     for event in pg.event.get():
         if event.type == pg.MOUSEBUTTONDOWN:
             print(event.pos)

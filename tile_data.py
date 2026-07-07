@@ -18,6 +18,8 @@ Grass_Side_Tex = Load_Texture("Grass Side", Resource_Path("textures/grass_side.p
 Checkpoint_Tex = Load_Texture("Checkpoint", Resource_Path("textures/checkpoint.png"))
 Dirt_Tex = Load_Texture("Dirt", Resource_Path("textures/dirt.png"))
 Spike_Tex = Load_Texture("Spike", Resource_Path("textures/spike.png"))
+Level_End_Tex = Load_Texture("Level_End", Resource_Path("textures/grass.png"))
+Player_Tex = Load_Texture("Player", Resource_Path("textures/player.png"))
 
 Tile_Texture = {
     "G": Grass_Tex,
@@ -25,4 +27,5 @@ Tile_Texture = {
     "S": Spike_Tex,
     "C": Checkpoint_Tex,
     "D": Dirt_Tex,
+    "E": Level_End_Tex,
 }
