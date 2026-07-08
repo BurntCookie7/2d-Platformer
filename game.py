@@ -18,7 +18,7 @@ clock = pg.time.Clock()
 Button_Font = pg.font.SysFont(None, 48)
 Title_Font = pg.font.SysFont(None, 100)
 
-from tile_data import Tile_Texture, Player_Tex, Resource_Path
+from tile_data import Tile_Texture, Player_Tex, Resource_Path, Player_Image, Rainbow_Tex, PWalk1, PWalk2
 
 #Functions
 def World_To_Screen(rect, camera_x, camera_y):
@@ -87,6 +87,9 @@ def Load_Level(level):
     Hazards.empty()
     Checkpoints.empty()
     Level_End_Triggers.empty()
+    Spawn_X = 100
+    Spawn_Y = 450
+    ground = None
             
     
     Level_Layout = Set_Level(Resource_Path(f"levels/{level}.txt"))
@@ -95,16 +98,26 @@ def Load_Level(level):
         for col_index, symbol in enumerate(row):
             if symbol == ".":
                 continue
+            
+            x, y = Grid_To_Pixels(col_index, row_index)
+            
+            if symbol == "X":
+                Spawn_X, Spawn_Y = x, y
+            
             obj_class = Tile_Class[symbol]
             texture = Tile_Texture[symbol]
-            x, y = Grid_To_Pixels(col_index, row_index)
             obj = obj_class(x, y, Tile_Size, Tile_Size, texture)
+            
+            if symbol in Tile_Rotaion:
+                obj = obj_class(x, y, Tile_Size, Tile_Size, texture, rotation=Tile_Rotaion[symbol])
+            else:
+                obj = obj_class(x,y, Tile_Size, Tile_Size, texture)
             
             All_Platforms.add(obj)
             if symbol == "P":
                 Solids.add(obj)
                 Landable.add(obj)
-            elif symbol == "S":
+            elif symbol in ("^", "v", "<", ">"):
                 Hazards.add(obj)
             elif symbol == "C":
                 Checkpoints.add(obj)
@@ -120,13 +133,8 @@ def Load_Level(level):
                 
     Current_Map = f"{level}"
                 
-    Player.x = 100
     
-    if ground is not None:
-        Player.bottom = ground.rect.top
-    else:
-        Player.y = 450
-            
+    Player.topleft = (Spawn_X, Spawn_Y)        
 
 
 #Classes
@@ -143,22 +151,57 @@ class Ground(pg.sprite.Sprite):
         self.rect = self.image.get_rect(topleft=(x, y))
 
 class Spike(pg.sprite.Sprite):
-    def __init__(self, x, y, width, height, texture):
+    def __init__(self, x, y, width, height, texture, rotation=0):
         super().__init__()
         spike_width = width // 2
         spike_height = height // 2
-        self.image = pg.transform.scale(texture, (spike_width, spike_height))
-        self.rect = self.image.get_rect(midbottom=(x + width // 2, y + height))
-        self.triangle = [
-            (self.rect.left, self.rect.bottom),
-            (self.rect.right, self.rect.bottom),
-            (self.rect.centerx, self.rect.top),
-        ]
+        base_image = pg.transform.scale(texture, (spike_width, spike_height))
+        self.image = pg.transform.rotate(base_image, rotation)
+        self.rotation = rotation
+        
+        # Anchor the spike flush against whichever surface it's pointing away from
+        if rotation == 0:      # pointing up, sits on floor
+            self.rect = self.image.get_rect(midbottom=(x + width // 2, y + height))
+        elif rotation == 180:  # pointing down, hangs from ceiling
+            self.rect = self.image.get_rect(midtop=(x + width // 2, y))
+        elif rotation == 90:   # pointing left, sits on right wall
+            self.rect = self.image.get_rect(midright=(x + width, y + height // 2))
+        elif rotation == 270:  # pointing right, sits on left wall
+            self.rect = self.image.get_rect(midleft=(x, y + height // 2))
+        
+        self.triangle = self._build_triangle(rotation)
+    
+    def _build_triangle(self, rotation):
+        if rotation == 0:
+            return [
+                (self.rect.left, self.rect.bottom),
+                (self.rect.right, self.rect.bottom),
+                (self.rect.centerx, self.rect.top),
+            ]
+        elif rotation == 180:
+            return [
+                (self.rect.left, self.rect.top),
+                (self.rect.right, self.rect.top),
+                (self.rect.centerx, self.rect.bottom),
+            ]
+        elif rotation == 90:
+            return [
+                (self.rect.right, self.rect.top),
+                (self.rect.right, self.rect.bottom),
+                (self.rect.left, self.rect.centery),
+            ]
+        elif rotation == 270:
+            return [
+                (self.rect.left, self.rect.top),
+                (self.rect.left, self.rect.bottom),
+                (self.rect.right, self.rect.centery),
+            ]
+    
     def check_collision(self, player_rect):
         if not player_rect.colliderect(self.rect):
             return False
         return Rect_Triangle_Collision(player_rect, self.triangle)
-
+    
 class Checkpoint(pg.sprite.Sprite):
     def __init__(self, x, y, width, height, texture):
         super().__init__()
@@ -177,6 +220,29 @@ class Level_End(pg.sprite.Sprite):
         super().__init__()
         self.image = pg.transform.scale(texture, (width, height))
         self.rect = self.image.get_rect(topleft=(x, y))
+        
+class Player_Spawn(pg.sprite.Sprite):
+    def __init__(self, x, y, width, height, texture):
+        super().__init__()
+        self.image = pg.transform.scale(texture, (width, height))
+        self.rect = self.image.get_rect(topleft=(x, y))
+        
+class Trail(pg.sprite.Sprite):
+    def __init__(self, x, y, width, height, texture):
+        super().__init__()
+        self.image = pg.transform.scale(texture, (width, height))
+        self.rect = self.image.get_rect(topleft=(x, y))
+        self.lifetime = 15
+        self.max_lifetime = 15
+        
+    def update(self):
+        self.lifetime -= 1
+        alpha = int(255 * (self.lifetime / self.max_lifetime))
+        alpha = max(0, alpha)
+        self.image.set_alpha(alpha)
+        if self.lifetime <= 0:
+            self.kill()
+
 
 Tile_Size = 50
 Level_Layout = Set_Level(Resource_Path("levels/level1.txt"))
@@ -184,20 +250,32 @@ Level_Layout = Set_Level(Resource_Path("levels/level1.txt"))
 Tile_Legend = {
     "G": "Ground",
     "P": "Platform",
-    "S": "Spike",
+    "^": "Spike",
     "C": "Checkpoint",
     "D": "Platform",
     "E": "Level_End",
+    "X": "Player_Spawn"
     
 }
 
 Tile_Class = {
     "G": Ground,
     "P": Platform,
-    "S": Spike,
+    "^": Spike,
+    "<": Spike,
+    ">": Spike,
+    "v": Spike,
     "C": Checkpoint,
     "D": Platform,
     "E": Level_End,
+    "X": Player_Spawn,
+}
+
+Tile_Rotaion = {
+    "^": 0,
+    "v": 180,
+    "<": 90,
+    ">": 270,
 }
 
 #Sprites
@@ -218,6 +296,7 @@ Hazards = pg.sprite.Group()
 Checkpoints = pg.sprite.Group()
 Menu_Buttons = pg.sprite.Group(New_Game, Editor)
 Level_End_Triggers = pg.sprite.Group()
+Trails = pg.sprite.Group()
 
 ground = None
 
@@ -234,7 +313,7 @@ for row_index, row in enumerate(Level_Layout):
         if symbol == "P":
             Solids.add(obj)
             Landable.add(obj)
-        elif symbol == "S":
+        elif symbol in ("^", "v", "<", ">"):
             Hazards.add(obj)
         elif symbol == "C":
             Checkpoints.add(obj)
@@ -270,7 +349,7 @@ Deadzone_Width = 100
 Screen_Player_X = Player.centerx - Camera_X
 Screen_Player_Y = Player.centery - Camera_Y
 Checkpoint_X = 100
-Checkpoint_Y = 450
+Checkpoint_Y = 600
 Checkpoint_Location = (Checkpoint_X, Checkpoint_Y)
 Touching_Wall = False
 Can_Walljump = False
@@ -288,6 +367,17 @@ Dash_Speed = 30
 Can_Dash = True
 Level_Number = 1
 Current_Map = f"level{Level_Number}"
+Going_Left = False
+Going_Right = False
+Dash_Key_Held = False
+Dashing = False
+Trail_Spawn_Timer = 0
+Train_Spawn_Interval = 2
+Walk_Frames = [PWalk1, PWalk2]
+Walk_Frame_Index = 0
+Walk_Anim_Timer = 0
+Walk_Anim_Speed = 8
+Was_On_Ground_This_Frame = False
 
 
 menu = True
@@ -320,6 +410,7 @@ while menu:
     pg.display.update()
     clock.tick(60)
 
+Load_Level("level1")
 while run:
     screen.fill((0, 200, 255))
 
@@ -335,13 +426,14 @@ while run:
     Walljump_Push *= Walljump_Decay
     if abs(Walljump_Push) < 0.1:
         Walljump_Push = 0
-        
+    
     Player_Yvel += Gravity_Force
+    
     if Player_Yvel > Max_Down_Speed:
         Player_Yvel = Max_Down_Speed
     elif Player_Yvel < -Max_Up_Speed:
         Player_Yvel = -Max_Up_Speed
-    
+        
     Player.y += Player_Yvel
     Player.x += Player_Xvel
 
@@ -363,13 +455,17 @@ while run:
             Load_Level(f"level{Level_Number}")
     
     #Vertical collision
+    Was_On_Ground_This_Frame = False
+    
     for objects in Landable:
         if Player.colliderect(objects.rect) and Player_Yvel > 0 and Player_Bottom <= objects.rect.top + Collide_Tolerance:
             On_Ground = True
             Can_Dash = True
-            Player_Speed = 3
             Player.bottom = objects.rect.top
             Player_Yvel = 0
+            Was_On_Ground_This_Frame = True
+    if not Was_On_Ground_This_Frame:
+        On_Ground = False
     for objects in Solids:
         if Player.colliderect(objects.rect) and Player_Yvel < 0 and Player_Top >= objects.rect.bottom:
             Player.top = objects.rect.bottom
@@ -381,7 +477,19 @@ while run:
     if Dash_Delay > 0:
         Player_Yvel -= Player_Yvel
         Player_Speed *= 2
-        
+    else:
+        Dashing = False
+    
+    Is_Walking = Movement_Direction != 0 and On_Ground
+    
+    if Is_Walking:
+        Walk_Anim_Timer += 1
+        if Walk_Anim_Timer >= Walk_Anim_Speed:
+            Walk_Anim_Timer = 0
+            Walk_Frame_Index = (Walk_Frame_Index + 1) % len(Walk_Frames)
+    else:
+        Walk_Frame_Index = 0
+        Walk_Anim_Timer = 0
     
     #Player Movement
     key = pg.key.get_pressed()
@@ -396,7 +504,10 @@ while run:
                 if Player_Xvel < 0:
                     Player.left = objects.rect.right
                     Touching_Wall = True
-                    Can_Dash = True
+                    if Going_Right == True:
+                        Can_Dash = False
+                    else:
+                        Can_Dash = True
                     Dash_Delay = 0
                     Touching_Wall_Right = True
                     Touching_Wall_Left = False
@@ -406,7 +517,10 @@ while run:
                     Player.right = objects.rect.left
                     Touching_Wall = True
                     Dash_Delay = 0
-                    Can_Dash = True
+                    if Going_Left == True:
+                        Can_Dash = False
+                    else:
+                        Can_Dash = True
                     Touching_Wall_Right = False
                     Touching_Wall_Left = True
                     if On_Ground == False:
@@ -422,8 +536,12 @@ while run:
     Movement_Direction = 0
     if key[pg.K_a] == True:
         Movement_Direction = -Player_Speed
+        Going_Left = True
+        Going_Right = False
     if key[pg.K_d] == True:
         Movement_Direction = Player_Speed
+        Going_Right = True
+        Going_Left = False
         
     if On_Ground:
         Coyote_Timer = Coyote_Timer_Max
@@ -443,25 +561,36 @@ while run:
                 Player_Yvel += -Player_Jump_Height - 20
                 Walljump_Push = Player_Speed * 2
         
-        
-    if key[pg.K_LSHIFT] == True or key[pg.K_RSHIFT] == True:
-        if On_Ground == True:
+    if On_Ground == True:
+        if key[pg.K_LSHIFT] == True or key[pg.K_RSHIFT] == True:
             Player_Speed = 5
             Player_Jump_Height = 8
-    else:
-        if On_Ground == False:
+        else:
             Player_Speed = 3
             Player_Jump_Height = 8
-            
-    if key[pg.K_LCTRL] == True or key[pg.K_RCTRL] == True:
+    else:
+        Player_Speed = 3
+        Player_Jump_Height = 8
+                
+    Ctrl_Pressed = key[pg.K_LCTRL] == True or key[pg.K_RCTRL] == True
+    
+    if Ctrl_Pressed and not Dash_Key_Held:
         if Dash_Delay <= 0:
             if Can_Dash == True:
                 if On_Ground == False:
+                    Sprinting = False
                     Can_Dash = False
+                    Dashing = True
                     Dash_Delay = 20
                     Gravity_Force = 0
                     Player_Yvel -= Player_Yvel
-                    Player_Xvel *= 3
+                    if Going_Left:
+                        Player_Xvel = -Dash_Speed
+                    elif Going_Right:
+                        Player_Xvel = Dash_Speed
+                    
+    
+    Dash_Key_Held = Ctrl_Pressed
             
     
     Screen_Player_X = Player.centerx - Camera_X
@@ -481,13 +610,32 @@ while run:
     elif Screen_Player_Y > Bottom_Bound:
         Camera_Y += (Screen_Player_Y - Bottom_Bound)
 
-    
+    if Dashing == True:
+        Trail_Spawn_Timer -= 1
+        if Trail_Spawn_Timer <= 0:
+            new_trail = Trail(Player.x - 10, Player.y, Player.width, Player.height, Rainbow_Tex)
+            Trails.add(new_trail)
+            Trail_Spawn_Timer = Train_Spawn_Interval
+
+    Trails.update()
+
     for objects in All_Platforms:
         screen.blit(objects.image, World_To_Screen(objects.rect, Camera_X, Camera_Y))
-    screen.blit(Player_Image, World_To_Screen(Player, Camera_X, Camera_Y))
+        
+    for trail in Trails:
+        screen.blit(trail.image, World_To_Screen(trail.rect, Camera_X, Camera_Y))
     
-    #Player.clamp_ip(pg.Rect(0, 0, SCREEN_width, SCREEN_height))
-    print(Current_Map)
+    if Is_Walking:
+        current_walk_tex = Walk_Frames[Walk_Frame_Index]
+        Player_Image = pg.transform.scale(current_walk_tex, (30, 50))
+    else:
+        Player_Image = pg.transform.scale(Player_Tex, (25, 50))
+        
+    if Going_Left == True:
+        Player_Image = pg.transform.flip(Player_Image, True, False)
+    Player_Sprite_Rect = Player_Image.get_rect(center=Player.center)
+    screen.blit(Player_Image, World_To_Screen(Player_Sprite_Rect, Camera_X, Camera_Y))
+    print(On_Ground)
     for event in pg.event.get():
         if event.type == pg.MOUSEBUTTONDOWN:
             print(event.pos)

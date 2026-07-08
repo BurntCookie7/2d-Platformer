@@ -20,12 +20,21 @@ Dirt_Tex = Load_Texture("Dirt", Resource_Path("textures/dirt.png"))
 Spike_Tex = Load_Texture("Spike", Resource_Path("textures/spike.png"))
 Level_End_Tex = Load_Texture("Level_End", Resource_Path("textures/grass.png"))
 Player_Tex = Load_Texture("Player", Resource_Path("textures/player.png"))
+Rainbow_Tex = Load_Texture("Rainbow", Resource_Path("textures/rainbow.png"))
+PWalk1 = Load_Texture("Walk1", Resource_Path("textures/player_walk1.png"))
+PWalk2 = Load_Texture("Walk2", Resource_Path("textures/player_walk2.png"))
+Spawn_Tex = Load_Texture("Spawn", Resource_Path("textures/spawn.png"))
+Player_Image = pg.transform.scale(Player_Tex, (25, 50))
 
 Tile_Texture = {
     "G": Grass_Tex,
     "P": Grass_Side_Tex,
-    "S": Spike_Tex,
+    "^": Spike_Tex,
+    "v": Spike_Tex,
+    ">": Spike_Tex,
+    "<": Spike_Tex,
     "C": Checkpoint_Tex,
     "D": Dirt_Tex,
     "E": Level_End_Tex,
+    "X": Spawn_Tex,
 }
