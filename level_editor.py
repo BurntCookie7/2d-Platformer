@@ -28,7 +28,7 @@ screen = pg.display.set_mode((SCREEN_width, SCREEN_height))
 pg.display.set_caption("Level Editor")
 clock = pg.time.Clock()
 
-from tile_data import Tile_Texture
+from tile_data import Tile_Texture, External_Resource_Path
 
 Tile_Size = 25
 Grid_Cols = 30
@@ -90,7 +90,7 @@ def Srtip_Auto_Footer(lines):
     
 def Load_Level_Editor(path):
     path = filedialog.askopenfilename(
-        initialdir="levels",
+        initialdir=External_Resource_Path("levels"),
         filetypes=[("Text files", "*.txt")],
     )
     if not path:  # cancelled
@@ -160,7 +160,7 @@ def Select_Symbol(symbol):
     
 def Save_Level_As():
     path = filedialog.asksaveasfilename(
-        initialdir="levels",
+        initialdir=External_Resource_Path("levels"),
         defaultextension=".txt",
         filetypes=[("text files", "*.txt")],
     )
@@ -210,8 +210,14 @@ def Quit_To_Game():
     clean_env.pop('SDL_WINDOWID', None)
     clean_env.pop('SDL_VIDEODRIVER', None)
     
-    game_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "game.py")
-    subprocess.Popen([sys.executable, game_path], env=clean_env)
+    if getattr(sys, 'frozen', False):
+        base_dir = os.path.dirname(os.path.abspath(sys.executable))
+        game_path = os.path.join(base_dir, "game.exe")
+        subprocess.Popen([game_path], env=clean_env)
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        game_path = os.path.join(base_dir, "game.py")
+        subprocess.Popen([sys.executable, game_path], env=clean_env)
 
 Tile_Rotaion = {
     "^": 0,
@@ -228,12 +234,12 @@ Default_Height.set("15")
 #tk.Button(sidebar, text="Zoom Out", command=Zoom_Out).pack()
 tk.Button(sidebar, text="Ground (G)", command=lambda: Select_Symbol("G")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Platform (P)", command=lambda: Select_Symbol("P")).pack(fill=tk.X, pady=2)
+tk.Button(sidebar, text="Dirt (D)", command=lambda: Select_Symbol("D")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Spike UP (^)", command=lambda: Select_Symbol("^")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Spike DOWN (v)", command=lambda: Select_Symbol("v")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Spike LEFT (<)", command=lambda: Select_Symbol("<")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Spike RIGHT (>)", command=lambda: Select_Symbol(">")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Checkpoint (C)", command=lambda: Select_Symbol("C")).pack(fill=tk.X, pady=2)
-tk.Button(sidebar, text="Dirt (D)", command=lambda: Select_Symbol("D")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Level End (E)", command=lambda: Select_Symbol("E")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Player Spawn (X)", command=lambda: Select_Symbol("X")).pack(fill=tk.X, pady=2)
 tk.Button(sidebar, text="Save", command=lambda: Save_Level_As()).pack(fill=tk.X, pady=10)

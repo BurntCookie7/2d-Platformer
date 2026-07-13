@@ -1303,6 +1303,9 @@
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.3824.0_x64__qbz5n2kfra8p0\\Lib\\threading.py',
    'PYMODULE'),
+  ('tile_data',
+   'C:\\Users\\kelly_jgu21dc\\Documents\\GitHub\\2d-Platformer\\tile_data.py',
+   'PYMODULE'),
   ('token',
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.3824.0_x64__qbz5n2kfra8p0\\Lib\\token.py',

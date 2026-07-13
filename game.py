@@ -18,7 +18,7 @@ clock = pg.time.Clock()
 Button_Font = pg.font.SysFont(None, 48)
 Title_Font = pg.font.SysFont(None, 100)
 
-from tile_data import Tile_Texture, Player_Tex, Resource_Path, Player_Image
+from tile_data import Tile_Texture, Player_Tex, External_Resource_Path, Player_Image
 from tile_data import Rainbow_Tex, PWalk1, PWalk2, PDash, PFall, Heart_Empty_Tex, Heart_Full_Tex
 
 #Functions
@@ -85,7 +85,7 @@ def Trin_Transparent(surface):
 def Load_Level(level):
     global Level_Layout, ground, Solids, Hazards, Landable, Checkpoints, Current_Map, Checkpoint_Y, Checkpoint_X
     
-    Level_Layout = Set_Level(Resource_Path(f"levels/{Current_Map}.txt"))
+    Level_Layout = Set_Level(External_Resource_Path(f"levels/{Current_Map}.txt"))
     
             
     All_Platforms.empty()
@@ -99,7 +99,7 @@ def Load_Level(level):
     ground = None
             
     
-    Level_Layout = Set_Level(Resource_Path(f"levels/{level}.txt"))
+    Level_Layout = Set_Level(External_Resource_Path(f"levels/{level}.txt"))
     
     for row_index, row in enumerate(Level_Layout):
         for col_index, symbol in enumerate(row):
@@ -253,7 +253,7 @@ class Trail(pg.sprite.Sprite):
 
 
 Tile_Size = 50
-Level_Layout = Set_Level(Resource_Path("levels/level1.txt"))
+Level_Layout = Set_Level(External_Resource_Path("levels/level1.txt"))
 
 Tile_Legend = {
     "G": "Ground",
@@ -415,7 +415,13 @@ while menu:
             elif Editor.rect.collidepoint(event.pos):
                 menu = False
                 run = False
-                subprocess.Popen(["python", "level_editor.py"])
+                if getattr(sys, 'frozen', False):
+                    base_dir = os.path.dirname(os.path.abspath(sys.executable))
+                    editor_path = os.path.join(base_dir, "level_editor.exe")
+                else:
+                    base_dir = os.path.dirname(os.path.abspath(__file__))
+                    editor_path = os.path.join(base_dir, "level_editor.py")
+                subprocess.Popen([editor_path] if getattr(sys, 'frozen', False) else [sys.executable, editor_path])
         if event.type == pg.QUIT:
             menu = False
             run = False
@@ -687,7 +693,6 @@ while run:
         pass  # skip drawing this frame to create a blink effect
     else:
         screen.blit(Player_Image, World_To_Screen(Player_Sprite_Rect, Camera_X, Camera_Y))
-    print(Falling)
     for event in pg.event.get():
         if event.type == pg.MOUSEBUTTONDOWN:
             print(event.pos)
