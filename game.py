@@ -18,7 +18,8 @@ clock = pg.time.Clock()
 Button_Font = pg.font.SysFont(None, 48)
 Title_Font = pg.font.SysFont(None, 100)
 
-from tile_data import Tile_Texture, Player_Tex, Resource_Path, Player_Image, Rainbow_Tex, PWalk1, PWalk2
+from tile_data import Tile_Texture, Player_Tex, Resource_Path, Player_Image
+from tile_data import Rainbow_Tex, PWalk1, PWalk2, PDash, PFall, Heart_Empty_Tex, Heart_Full_Tex
 
 #Functions
 def World_To_Screen(rect, camera_x, camera_y):
@@ -30,9 +31,14 @@ def Set_Checkpoint(checkpoint):
     Checkpoint_Y = checkpoint.rect.y
     
 def Spawn_At_Checkpoint():
-    global Checkpoint_X, Checkpoint_Y
+    global Checkpoint_X, Checkpoint_Y, Player_Xvel, Player_Yvel, Dashing, Dash_Delay, Walljump_Push
     Player.x = Checkpoint_X
     Player.y = Checkpoint_Y
+    Player_Xvel = 0
+    Player_Yvel = 0
+    Dashing = False
+    Dash_Delay = 0
+    Walljump_Push = 0
 
 def Toggle_Fullscreen():
     global Fullscreen, screen
@@ -206,7 +212,7 @@ class Checkpoint(pg.sprite.Sprite):
     def __init__(self, x, y, width, height, texture):
         super().__init__()
         self.image = pg.transform.scale(texture, (width // 2 , height // 2))
-        self.rect = self.image.get_rect(topleft=(x, y))
+        self.rect = self.image.get_rect(center=(x + width // 2, y + height // 2))
 
 class Menu_Button(pg.sprite.Sprite):
     def __init__(self, x, y, width, height):
@@ -287,6 +293,8 @@ Editor = Menu_Button(300, 370, 190, 50)
 New_Game_Text = Button_Font.render("New Game", True, (255, 255, 255))
 Editor_Text = Button_Font.render("Editor", True, (255, 255, 255))
 Title_Text = Title_Font.render("2d Platformer", True, (255, 255, 255))
+#UI
+Heart_Tex = pg.transform.scale(Heart_Full_Tex, (25, 25))
 
 #Groups
 All_Platforms = pg.sprite.Group()
@@ -332,6 +340,8 @@ for row_index, row in enumerate(Level_Layout):
 Player_Speed = 3
 Player_Xvel = 0
 Player_Jump_Height = 8
+Player_Hearts = 3
+Player_Health = 3
 Player_Yvel = 0
 Sprinting = False
 Movement_Direction = Player_Speed
@@ -339,7 +349,7 @@ Gravity_Force = 0.4
 On_Ground = True
 Player_Bottom = Player.bottom
 Player_Top = Player.top
-Collide_Tolerance = 15
+Collide_Tolerance = 5
 Coyote_Timer_Max = 10
 Coyote_Timer = 0
 Camera_X = 0
@@ -363,7 +373,7 @@ Fullscreen = False
 run = False
 menu = False
 Dash_Delay = 0
-Dash_Speed = 30
+Dash_Speed = 25
 Can_Dash = True
 Level_Number = 1
 Current_Map = f"level{Level_Number}"
@@ -378,6 +388,9 @@ Walk_Frame_Index = 0
 Walk_Anim_Timer = 0
 Walk_Anim_Speed = 8
 Was_On_Ground_This_Frame = False
+Falling = False
+Invincibility_Timer = 0
+Invincibility_Duration = 45
 
 
 menu = True
@@ -439,13 +452,19 @@ while run:
 
     #Hazard collision
     for hazards in Hazards:
-        if hazards.check_collision(Player):
-            Spawn_At_Checkpoint()
+        if hazards.check_collision(Player) and Invincibility_Timer <= 0:
+            Player_Health -= 1
+            Invincibility_Timer = Invincibility_Duration
+
+            Player_Yvel = -6
+            if Player_Health <= 0:
+                Spawn_At_Checkpoint()
             
     #Checkpoint collision
     for checkpoints in Checkpoints:
         if Player.colliderect(checkpoints):
             Set_Checkpoint(checkpoints)
+            Player_Health = 3
     
     #Level end collision
     for triggers in Level_End_Triggers:
@@ -458,7 +477,13 @@ while run:
     Was_On_Ground_This_Frame = False
     
     for objects in Landable:
-        if Player.colliderect(objects.rect) and Player_Yvel > 0 and Player_Bottom <= objects.rect.top + Collide_Tolerance:
+        horizontally_overlapping = Player.right > objects.rect.left and Player.left < objects.rect.right
+        vertically_close = (
+            Player_Yvel >= 0
+            and Player_Bottom <= objects.rect.top + Collide_Tolerance
+            and Player.bottom >= objects.rect.top - Collide_Tolerance
+        )
+        if horizontally_overlapping and vertically_close:
             On_Ground = True
             Can_Dash = True
             Player.bottom = objects.rect.top
@@ -616,6 +641,14 @@ while run:
             new_trail = Trail(Player.x - 10, Player.y, Player.width, Player.height, Rainbow_Tex)
             Trails.add(new_trail)
             Trail_Spawn_Timer = Train_Spawn_Interval
+            
+    if Invincibility_Timer > 0:
+        Invincibility_Timer -= 1
+            
+    if On_Ground == False and Touching_Wall == False and Player_Yvel >= 0:
+        Falling = True
+    else:
+        Falling = False
 
     Trails.update()
 
@@ -628,14 +661,32 @@ while run:
     if Is_Walking:
         current_walk_tex = Walk_Frames[Walk_Frame_Index]
         Player_Image = pg.transform.scale(current_walk_tex, (30, 50))
+    elif Dashing:
+        Player_Image = pg.transform.scale(PDash, (30, 50))
+    elif Falling:
+        Player_Image = pg.transform.scale(PFall, (30, 50))
     else:
         Player_Image = pg.transform.scale(Player_Tex, (25, 50))
         
     if Going_Left == True:
         Player_Image = pg.transform.flip(Player_Image, True, False)
+    
+    heart_loc = 25
+    for i in range(Player_Hearts):
+        if i < Player_Health:
+            Heart_Tex = pg.transform.scale(Heart_Full_Tex, (32, 32))
+            screen.blit(Heart_Tex, (heart_loc, 25))
+        else:
+            Heart_Tex = pg.transform.scale(Heart_Empty_Tex, (32, 32))
+            screen.blit(Heart_Tex, (heart_loc, 25))
+        heart_loc += 32
+            
     Player_Sprite_Rect = Player_Image.get_rect(center=Player.center)
-    screen.blit(Player_Image, World_To_Screen(Player_Sprite_Rect, Camera_X, Camera_Y))
-    print(On_Ground)
+    if Invincibility_Timer > 0 and Invincibility_Timer % 6 < 3:
+        pass  # skip drawing this frame to create a blink effect
+    else:
+        screen.blit(Player_Image, World_To_Screen(Player_Sprite_Rect, Camera_X, Camera_Y))
+    print(Falling)
     for event in pg.event.get():
         if event.type == pg.MOUSEBUTTONDOWN:
             print(event.pos)

@@ -18,12 +18,16 @@ Grass_Side_Tex = Load_Texture("Grass Side", Resource_Path("textures/grass_side.p
 Checkpoint_Tex = Load_Texture("Checkpoint", Resource_Path("textures/checkpoint.png"))
 Dirt_Tex = Load_Texture("Dirt", Resource_Path("textures/dirt.png"))
 Spike_Tex = Load_Texture("Spike", Resource_Path("textures/spike.png"))
-Level_End_Tex = Load_Texture("Level_End", Resource_Path("textures/grass.png"))
+Level_End_Tex = Load_Texture("Level End", Resource_Path("textures/grass.png"))
 Player_Tex = Load_Texture("Player", Resource_Path("textures/player.png"))
 Rainbow_Tex = Load_Texture("Rainbow", Resource_Path("textures/rainbow.png"))
 PWalk1 = Load_Texture("Walk1", Resource_Path("textures/player_walk1.png"))
 PWalk2 = Load_Texture("Walk2", Resource_Path("textures/player_walk2.png"))
+PDash = Load_Texture("Dash", Resource_Path("textures/player_dash.png"))
+PFall = Load_Texture("Fall", Resource_Path("textures/player_fall.png"))
 Spawn_Tex = Load_Texture("Spawn", Resource_Path("textures/spawn.png"))
+Heart_Full_Tex = Load_Texture("Heart Full", Resource_Path("textures/heart_full.png"))
+Heart_Empty_Tex = Load_Texture("Heart Empty", Resource_Path("textures/heart_empty.png"))
 Player_Image = pg.transform.scale(Player_Tex, (25, 50))
 
 Tile_Texture = {
