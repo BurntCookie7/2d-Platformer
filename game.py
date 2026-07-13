@@ -31,7 +31,7 @@ def Set_Checkpoint(checkpoint):
     Checkpoint_Y = checkpoint.rect.y
     
 def Spawn_At_Checkpoint():
-    global Checkpoint_X, Checkpoint_Y, Player_Xvel, Player_Yvel, Dashing, Dash_Delay, Walljump_Push
+    global Checkpoint_X, Checkpoint_Y, Player_Xvel, Player_Yvel, Dashing, Dash_Delay, Walljump_Push, Player_Health
     Player.x = Checkpoint_X
     Player.y = Checkpoint_Y
     Player_Xvel = 0
@@ -39,6 +39,7 @@ def Spawn_At_Checkpoint():
     Dashing = False
     Dash_Delay = 0
     Walljump_Push = 0
+    Player_Health = Player_Hearts
 
 def Toggle_Fullscreen():
     global Fullscreen, screen
@@ -82,7 +83,7 @@ def Trin_Transparent(surface):
     return surface.subsurface(rect).copy()
 
 def Load_Level(level):
-    global Level_Layout, ground, Solids, Hazards, Landable, Checkpoints, Current_Map
+    global Level_Layout, ground, Solids, Hazards, Landable, Checkpoints, Current_Map, Checkpoint_Y, Checkpoint_X
     
     Level_Layout = Set_Level(Resource_Path(f"levels/{Current_Map}.txt"))
     
@@ -140,7 +141,8 @@ def Load_Level(level):
     Current_Map = f"{level}"
                 
     
-    Player.topleft = (Spawn_X, Spawn_Y)        
+    Player.topleft = (Spawn_X, Spawn_Y)
+    Checkpoint_X, Checkpoint_Y = Spawn_X, Spawn_Y      
 
 
 #Classes
@@ -341,7 +343,7 @@ Player_Speed = 3
 Player_Xvel = 0
 Player_Jump_Height = 8
 Player_Hearts = 3
-Player_Health = 3
+Player_Health = Player_Hearts
 Player_Yvel = 0
 Sprinting = False
 Movement_Direction = Player_Speed
@@ -464,7 +466,6 @@ while run:
     for checkpoints in Checkpoints:
         if Player.colliderect(checkpoints):
             Set_Checkpoint(checkpoints)
-            Player_Health = 3
     
     #Level end collision
     for triggers in Level_End_Triggers:
